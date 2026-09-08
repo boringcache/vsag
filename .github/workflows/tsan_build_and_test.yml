@@ -51,7 +51,10 @@ jobs:
         - /opt:/useless
     steps:
       - name: Free Disk Space
-        run: rm -rf /useless/*
+        # Keep the directory mounted at /__t available to action installers.
+        run: |
+          find /useless -mindepth 1 -maxdepth 1 ! -name hostedtoolcache -exec rm -rf {} +
+          find /useless/hostedtoolcache -mindepth 1 -maxdepth 1 -exec rm -rf {} +
       - uses: actions/checkout@v4
         with:
           fetch-depth: '0'
@@ -62,8 +65,6 @@ jobs:
           cache: false
       - name: Compiler cache
         uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
-        env:
-          RUNNER_TOOL_CACHE: ${{ runner.temp }}/boringcache-tools
         with:
           mode: ccache
           trust-policy: auto
