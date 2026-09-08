@@ -54,7 +54,7 @@ jobs:
       - name: Free Disk Space
         # Keep the directory mounted at /__t available to action installers.
         run: |
-          find /useless -mindepth 1 -maxdepth 1 ! -name hostedtoolcache -exec rm -rf {} +
+          find /useless -mindepth 1 -maxdepth 1 ! -name '.*' ! -name hostedtoolcache -exec rm -rf {} +
           find /useless/hostedtoolcache -mindepth 1 -maxdepth 1 -exec rm -rf {} +
       - uses: actions/checkout@v4
         with:
