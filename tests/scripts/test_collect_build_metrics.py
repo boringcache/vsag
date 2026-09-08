@@ -152,6 +152,11 @@ class BuildMetricsTest(unittest.TestCase):
                     clear_ccache=True,
                 )
                 collector = METRICS.Collector(args)
+                selection = Path("build/.vsag-dependency-cache/antlr4-selection.json")
+                selection.parent.mkdir(parents=True)
+                selection.write_text(json.dumps({"dependency": "antlr4", "resolution": "prebuilt",
+                                                 "cache_state": "hit"}))
+                Path("metrics/configure.log").write_text("-- Using system OpenBLAS as BLAS backend\n")
                 collector.phases = [
                     {
                         "name": "configure",
@@ -168,6 +173,12 @@ class BuildMetricsTest(unittest.TestCase):
                 os.chdir(previous_directory)
 
         self.assertEqual(report["base_sha"], "base")
+        self.assertEqual(report["dependency_selection"], [
+            {"dependency": "antlr4", "resolution": "prebuilt", "cache_state": "hit"},
+            {"dependency": "openblas", "resolution": "system"},
+        ])
+        self.assertIn("| antlr4 | prebuilt | hit |", summary)
+        self.assertIn("| openblas | system | not applicable |", summary)
         self.assertIn("\n| Phase | Wall time", summary)
         self.assertTrue(summary.endswith("\n"))
 

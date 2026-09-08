@@ -313,6 +313,16 @@ class Collector:
         return self.failure_code
 
     def write_reports(self) -> None:
+        selections = []
+        for path in sorted((self.build_dir / ".vsag-dependency-cache").glob("*-selection.json")):
+            selections.append(json.loads(path.read_text()))
+        configure_log = self.output_dir / "configure.log"
+        if configure_log.is_file():
+            output = configure_log.read_text()
+            if "Using system OpenBLAS as BLAS backend" in output:
+                selections.append({"dependency": "openblas", "resolution": "system"})
+            elif "Building OpenBLAS from source" in output:
+                selections.append({"dependency": "openblas", "resolution": "source"})
         report = {
             "schema_version": 1,
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -332,6 +342,7 @@ class Collector:
             "dependencies": [json.loads(path.read_text()) for path in
                              sorted((self.output_dir / "dependencies").glob("*.json"))
                              if path.name in ("antlr4.json", "hdf5.json")],
+            "dependency_selection": selections,
         }
         (self.output_dir / "build-metrics.json").write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -390,6 +401,14 @@ def render_markdown(report: dict[str, Any], concise: bool) -> str:
         ]
     )
     cold = phases.get("cold_build", {})
+    if report.get("dependency_selection"):
+        lines.extend(["Dependency selection at configure time:", "",
+                      "| Dependency | Selected implementation | Cache validation |",
+                      "| --- | --- | --- |"])
+        for dependency in report["dependency_selection"]:
+            lines.append(f"| {dependency['dependency']} | {dependency['resolution']} | "
+                         f"{dependency.get('cache_state', 'not applicable')} |")
+        lines.append("")
     if cold:
         lines.extend(
             [
