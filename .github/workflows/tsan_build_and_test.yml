@@ -62,6 +62,8 @@ jobs:
           cache: false
       - name: Compiler cache
         uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.temp }}/boringcache-tools
         with:
           mode: ccache
           trust-policy: auto
