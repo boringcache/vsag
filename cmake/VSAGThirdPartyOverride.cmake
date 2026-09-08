@@ -159,6 +159,20 @@ function (vsag_resolve_thirdparty_override dependency pin urls_variable)
     vsag_thirdparty_pinned_variable (
         "${dependency}" "${pin}" pinned_variable COLLISION_PINS ${ARG_COLLISION_PINS})
     set (resolved_urls "${${urls_variable}}")
+    set (selected_override "")
+    if (DEFINED ENV{${pinned_variable}})
+        set (selected_override "$ENV{${pinned_variable}}")
+    elseif (DEFINED ENV{${legacy_variable}})
+        set (selected_override "$ENV{${legacy_variable}}")
+    endif ()
+    set (url_behavior "default URLs remain download fallbacks")
+    set (local_override FALSE)
+    if (NOT selected_override STREQUAL ""
+        AND (selected_override MATCHES "^file://"
+             OR NOT selected_override MATCHES "^[A-Za-z][A-Za-z0-9+.-]*://"))
+        set (local_override TRUE)
+        set (url_behavior "local archive is used directly with the recipe's hash check")
+    endif ()
 
     if (DEFINED ENV{${pinned_variable}})
         list (PREPEND resolved_urls "$ENV{${pinned_variable}}")
@@ -169,14 +183,13 @@ function (vsag_resolve_thirdparty_override dependency pin urls_variable)
         endif ()
         message (STATUS
                  "Third-party override: dependency=${dependency}, pin=${pin}, source=pinned, "
-                 "variable=${pinned_variable}; ${legacy_behavior}; default URLs remain download "
-                 "fallbacks")
+                 "variable=${pinned_variable}; ${legacy_behavior}; ${url_behavior}")
     elseif (DEFINED ENV{${legacy_variable}})
         list (PREPEND resolved_urls "$ENV{${legacy_variable}}")
         message (DEPRECATION
                  "Third-party override: dependency=${dependency}, pin=${pin}, source=legacy, "
-                 "variable=${legacy_variable}; use pinned variable ${pinned_variable}; default "
-                 "URLs remain download fallbacks")
+                 "variable=${legacy_variable}; use pinned variable ${pinned_variable}; "
+                 "${url_behavior}")
     else ()
         message (STATUS
                  "Third-party override: dependency=${dependency}, pin=${pin}, source=default, "
@@ -184,5 +197,9 @@ function (vsag_resolve_thirdparty_override dependency pin urls_variable)
                  "fallback ${legacy_variable} is unset")
     endif ()
 
+    # ExternalProject rejects local paths or file URLs in a list of mirror URLs.
+    if (local_override)
+        set (resolved_urls "${selected_override}")
+    endif ()
     set (${urls_variable} "${resolved_urls}" PARENT_SCOPE)
 endfunction ()

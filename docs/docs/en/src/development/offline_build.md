@@ -63,6 +63,9 @@ The suffix is derived from the exact pinned identifier:
 - **The value may be a local path or a URL.** Accepted forms include an
   absolute filesystem path (`/data/deps/fmt-10.2.1.tar.gz`), a `file://` URL, or
   any `http(s)://` URL — including an internal HTTP server or object storage.
+- **Local archives are used directly.** ExternalProject cannot combine a local
+  path or `file://` URL with remote mirror URLs. A missing or invalid local file
+  fails its normal file/hash check. HTTP mirrors retain the upstream URL fallbacks.
 - **The archive hash is still verified.** Each dependency declares a
   `URL_HASH` (MD5 or SHA256). Your mirrored / local archive must be **byte
   identical to the upstream archive**, otherwise CMake aborts with a hash

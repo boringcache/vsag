@@ -166,4 +166,33 @@ assert_matches ("${output}" "HASH mismatch" "mismatched archive rejection")
 assert_not_matches ("${output}" "wrong archive content" "hash diagnostic content safety")
 file (REMOVE "${hash_fixture}" "${download_fixture}")
 
+# Exercise ExternalProject itself: file(DOWNLOAD) accepts local URL lists that
+# ExternalProject rejects before download or hash validation can start.
+set (archive_test_root "${CMAKE_CURRENT_BINARY_DIR}/.thirdparty-archive-test")
+file (MAKE_DIRECTORY "${archive_test_root}")
+file (WRITE "${archive_test_root}/archive.txt" "verified local archive fixture\n")
+file (SHA256 "${archive_test_root}/archive.txt" archive_hash)
+foreach (local_form path url)
+    set (archive "${archive_test_root}/archive.txt")
+    if (local_form STREQUAL "url")
+        set (archive "file://${archive}")
+    endif ()
+    set (ENV{VSAG_THIRDPARTY_FMT_10_2_1} "${archive}")
+    execute_process (
+        COMMAND ${CMAKE_COMMAND}
+                -S ${VSAG_SOURCE_DIR}/tests/cmake/thirdparty_archive_fixture
+                -B ${archive_test_root}/${local_form}
+                -DVSAG_SOURCE_DIR=${VSAG_SOURCE_DIR} -DTEST_ARCHIVE_HASH=${archive_hash}
+        RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
+    if (NOT result EQUAL 0)
+        message (FATAL_ERROR "Local archive configuration failed: ${stdout}\n${stderr}")
+    endif ()
+    execute_process (COMMAND ${CMAKE_COMMAND} --build ${archive_test_root}/${local_form}
+                     RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
+    if (NOT result EQUAL 0)
+        message (FATAL_ERROR "Local archive hash verification failed: ${stdout}\n${stderr}")
+    endif ()
+endforeach ()
+file (REMOVE_RECURSE "${archive_test_root}")
+
 message (STATUS "Third-party pinned-variable tests passed")

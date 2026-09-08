@@ -19,9 +19,10 @@ def main() -> None:
     def configure(name, *, build="build", flags="", environment=None):
         command = ["make", "configure-asan", "COMPILE_JOBS=3", f"DEBUG_BUILD_DIR={build}",
                    f"EXTRA_DEFINED={os.environ.get('EXTRA_DEFINED', '')} {flags}"]
-        result = subprocess.run(command, check=True, capture_output=True, text=True,
+        result = subprocess.run(command, check=False, capture_output=True, text=True,
                                 env=environment)
         (reports / f"{name}.log").write_text(result.stdout + result.stderr)
+        result.check_returncode()
         return result.stdout
 
     def expect(name, state, *, dependency="antlr4", build="build"):
