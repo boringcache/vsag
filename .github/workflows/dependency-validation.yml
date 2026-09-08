@@ -84,13 +84,6 @@ jobs:
               assert report["cache_state"] == "hit", report
               assert report["resolution"] == "prebuilt", report
           PY
-      - name: Record current cache usage
-        run: |
-          boringcache status --json > build-metrics/boringcache-status.json
-          boringcache tags --limit 100 --json > build-metrics/boringcache-tags.json
-          boringcache check boringcache/vsag \
-            cpp-branch-boringcache-validation-macos-15-arm64,cpp-branch-boringcache-validation-ubuntu-22-arm64,cpp-branch-boringcache-validation-ubuntu-22-x86_64 \
-            --no-git --no-platform --json > build-metrics/boringcache-compiler-entries.json
       - name: Build VSAG, tests, examples and tools
         run: make build-asan COMPILE_JOBS=3
       - name: Run dependency consumers
@@ -98,6 +91,14 @@ jobs:
           ./build/tests/unittests '[expression_visitor]'
           ./build/tools/eval/eval_dataset_test
           ./build/tools/eval/eval_performance --help
+      - name: Record current cache usage
+        if: always()
+        run: |
+          boringcache status boringcache/vsag --json > build-metrics/boringcache-status.json
+          boringcache tags boringcache/vsag --limit 100 --json > build-metrics/boringcache-tags.json
+          boringcache check boringcache/vsag \
+            cpp-branch-boringcache-validation-macos-15-arm64,cpp-branch-boringcache-validation-ubuntu-22-arm64,cpp-branch-boringcache-validation-ubuntu-22-x86_64 \
+            --no-git --no-platform --json > build-metrics/boringcache-compiler-entries.json
       - name: Upload dependency evidence
         if: always()
         uses: actions/upload-artifact@v5
