@@ -2,7 +2,7 @@ name: Tsan Build & Test Parallel
 
 on:
   push:
-    branches: [ "main", "0.*" ]
+    branches: [ "main", "0.*", "boringcache-validation" ]
     paths-ignore:
       - 'docs/**'
   pull_request:

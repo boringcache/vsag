@@ -216,9 +216,9 @@ flags, dependency recipes, tests, and runners remain the upstream choices.
 
 For local use, install BoringCache and the upstream build dependencies, connect
 to the configured workspace with `boringcache onboard --skip-workflows`, then
-run `mise install` and `mise exec -- boringcache ccache`. The configured command
-is `make test`. Local runs restore by default; publishing requires explicit
-write access. Compatible compiler inputs can reuse the same remote cache;
+run `mise install` and `mise exec -- boringcache ccache --read-only`. The configured
+command is `make test`. This example restores without publishing; publishing
+requires write access. Compatible compiler inputs can reuse the same remote cache;
 different operating systems, architectures, compilers, and flags do not imply
 interchangeable outputs.
 
