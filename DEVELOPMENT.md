@@ -213,7 +213,8 @@ For a complete list of build options, see the `option()` directives in `cmake/VS
 The `boringcache-validation` branch uses `.boringcache.toml` for native ccache
 storage and the existing `.ci-downloads` archive cache. CI installs ccache 4.14
 and its HTTP helper through `.mise.toml` and `mise.lock`. The compiler, build
-flags, dependency recipes, tests, and runners remain the upstream choices.
+flags, tests, and runners remain the upstream choices. The Linux x86 GCC pilot
+also minimizes HDF5's build and adds validated ANTLR4/HDF5 installations.
 Linux cache jobs use Docker's `--init` option to reap background processes, and
 disk cleanup preserves the directory mounted at `/__t` for action installers.
 
@@ -229,5 +230,18 @@ GitHub Actions uses a workspace-scoped OIDC connection. Pull requests restore
 without publishing, and the daily jobs retain their read-only cache policy.
 The PR x86 measurement job still clears its local compiler cache. Python wheel
 containers and the Docker image build graph retain their existing integration.
-Nested ANTLR4 and HDF5 builds are not claimed as compiler-cache hits or cached
-installation prefixes.
+The PR x86 job prepares independent ANTLR4 and HDF5 installations with the public
+`boringcache run` command. VSAG computes each exact fingerprint and validates its
+manifest, file hashes and a relocated C++ consumer before CMake selects it.
+The payload contains runtime headers, required static libraries and licenses;
+generated VSAG parser headers and build trees stay outside the cache.
+Set `VSAG_USE_PREBUILT_DEPS=OFF` to use source builds. This is the default outside
+the pilot jobs. Source builds still use the existing verified archive downloads
+and pin-qualified overrides. The daily x86 job explicitly disables both prebuilt
+dependencies and system OpenBLAS selection to exercise source builds.
+
+The manual `Dependency validation` workflow builds and publishes installations,
+checks corrupt-payload and ABI fallback, compares the HDF5 recipes, then restores
+on a fresh read-only runner and builds the dependency consumers. Its summaries
+separate installation preparation, source build stages and cache payload size.
+See the [building guide](docs/docs/en/src/development/building.md) for local use.

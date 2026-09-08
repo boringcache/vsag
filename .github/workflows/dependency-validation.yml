@@ -1,0 +1,104 @@
+name: Dependency validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  CMAKE_GENERATOR: Ninja
+  VSAG_FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.ci-fetchcontent
+  VSAG_THIRDPARTY_DOWNLOAD_DIR: ${{ github.workspace }}/.ci-downloads
+  VSAG_USE_PREBUILT_DEPS: ON
+  VSAG_ENABLE_EXAMPLES: ON
+  VSAG_ENABLE_TOOLS: ON
+  EXTRA_DEFINED: -DVSAG_USE_SYSTEM_OPENBLAS=ON
+
+jobs:
+  cold:
+    name: BoringCache dependencies cold
+    if: github.repository == 'boringcache/vsag' && github.ref == 'refs/heads/boringcache-validation'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare host
+        run: sudo env VSAG_INSTALL_INTEL_MKL=OFF bash ./scripts/deps/install_deps_ubuntu.sh
+      - name: Test dependency and measurement helpers
+        run: |
+          python3 -m unittest discover -s tests/scripts -p 'test_dependency_cache.py'
+          python3 -m unittest discover -s tests/scripts -p 'test_collect_build_metrics.py'
+          make test-cmake
+      - uses: ./.github/actions/prepare-fetchcontent
+        with:
+          include-tests: "true"
+          include-tools: "true"
+      - uses: ./.github/actions/prepare-dependencies
+        with:
+          phase: cold
+      - name: Compare HDF5 source recipes
+        run: python3 -m scripts.ci.measure_hdf5_recipe
+      - name: Verify selected installations and source fallback
+        run: python3 -m scripts.ci.validate_dependency_selection
+      - name: Upload dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dependency-cold
+          include-hidden-files: true
+          path: |
+            build-metrics
+            build/.vsag-dependency-cache
+            build/.vsag-build-info/*log
+          retention-days: 14
+
+  warm:
+    name: BoringCache dependencies warm
+    needs: cold
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare host
+        run: sudo env VSAG_INSTALL_INTEL_MKL=OFF bash ./scripts/deps/install_deps_ubuntu.sh
+      - uses: ./.github/actions/prepare-fetchcontent
+        with:
+          include-tests: "true"
+          include-tools: "true"
+      - uses: ./.github/actions/prepare-dependencies
+        with:
+          phase: warm
+      - name: Require restored installations
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for dependency in ("antlr4", "hdf5"):
+              report = json.loads(Path(f"build-metrics/dependencies/{dependency}.json").read_text())
+              assert report["cache_state"] == "hit", report
+              assert report["resolution"] == "prebuilt", report
+          PY
+      - name: Build VSAG, tests, examples and tools
+        run: make build-asan COMPILE_JOBS=3
+      - name: Run dependency consumers
+        run: |
+          ./build/tests/unittests '[expression_visitor]'
+          ./build/tools/eval/eval_dataset_test
+          ./build/tools/eval/eval_performance --help
+      - name: Upload dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dependency-warm
+          include-hidden-files: true
+          path: |
+            build-metrics
+            build/.vsag-dependency-cache
+            build/.vsag-build-info/*log
+          retention-days: 14

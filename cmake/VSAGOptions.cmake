@@ -49,6 +49,10 @@ set (BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/.vsag-build-info" CACHE PATH "Metadata 
 set (DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/.vsag-downloads" CACHE PATH "Download cache directory for ExternalProject archives.")
 set (BUILDING_PATH "" CACHE STRING "Optional PATH prefix for third-party build tools.")
 
+option (VSAG_USE_PREBUILT_DEPS "Use validated ANTLR4/HDF5 installations on Linux x86_64 GCC." OFF)
+set (VSAG_PREBUILT_DEPS_DIR "${PROJECT_SOURCE_DIR}/.ci-dependencies" CACHE PATH
+     "Directory containing validated per-dependency installations; source builds remain the fallback.")
+
 # Policy for resolving third-party dependencies from the host system instead of
 # building bundled copies.
 #   AUTO (default) - use a system / pre-existing copy when one is found, fall back

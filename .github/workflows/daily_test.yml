@@ -39,13 +39,9 @@ jobs:
           trust-policy: restore
           fail-on-cache-error: true
       - name: Make Asan
-        # Daily guard for the from-source OpenBLAS build path. We intentionally
-        # do NOT pass -DUSE_SYSTEM_OPENBLAS=ON here: even though the image
-        # ships libopenblas-dev, leaving the flag at its default (OFF) means
-        # CMake downloads and compiles OpenBLAS via ExternalProject_Add, which
-        # is what release artifacts depend on. PR CI / coverage / lint use the
-        # system OpenBLAS for speed; this job is the one that keeps the
-        # source-build path covered.
+        # Exercise source fallback even when the image supplies system OpenBLAS.
+        env:
+          EXTRA_DEFINED: -DVSAG_USE_SYSTEM_OPENBLAS=OFF -DVSAG_USE_PREBUILT_DEPS=OFF
         run: export CMAKE_GENERATOR="Ninja"; make asan COMPILE_JOBS=3 VSAG_ENABLE_EXAMPLES=ON
       - name: Clean
         run: find ./build -type f -name "*.o" -exec rm -f {} +

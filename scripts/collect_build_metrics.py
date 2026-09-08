@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import datetime as dt
 import json
 import os
@@ -42,7 +43,11 @@ def load_ccache_stats(text: str) -> dict[str, Any]:
     stats = data.get("stats", data)
     return {
         "available": True,
-        "cache_hit": stats.get("cache_hit", stats.get("cache_hit_direct", 0)),
+        "cache_hit": stats.get(
+            "cache_hit",
+            stats.get("direct_cache_hit", stats.get("cache_hit_direct", 0))
+            + stats.get("preprocessed_cache_hit", stats.get("cache_hit_preprocessed", 0)),
+        ),
         "cache_miss": stats.get("cache_miss", 0),
         "raw": data,
     }
@@ -68,8 +73,9 @@ def read_compile_commands(path: Path) -> dict[str, str]:
 
 
 def is_dependency_output(normalized: str) -> bool:
-    return normalized.startswith(("_deps/", "extern/", "hdf5", "openblas")) or any(
-        part in normalized for part in ("/_deps/", "/extern/", "/hdf5", "/openblas")
+    return bool(
+        re.search(r"(^|/)(_deps|\.ci-fetchcontent|extern)(/|$)", normalized)
+        or re.search(r"(^|/)(antlr4|hdf5|openblas)(/|-)", normalized)
     )
 
 
@@ -86,6 +92,11 @@ def classify_edge(output: str, link_outputs: set[str] | None = None) -> str:
             return "production_compile"
         return "other_compile"
     if is_dependency_output(normalized):
+        for stage in ("configure", "install"):
+            if normalized.endswith(f"-{stage}"):
+                return f"dependency_{stage}"
+        if re.search(r"-(download|update|patch|mkdir)$", normalized):
+            return "dependency_prepare"
         return "dependency_build"
     if link_outputs and output in link_outputs:
         return "link"
@@ -116,6 +127,7 @@ def parse_ninja_log(
     translation_units: list[dict[str, Any]] = []
     if not path.is_file():
         return {"available": False, "categories": categories, "slowest_translation_units": []}
+    edges: dict[tuple[Any, ...], list[str]] = {}
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not line or line.startswith("#"):
             continue
@@ -126,7 +138,12 @@ def parse_ninja_log(
             start_ms, end_ms = int(fields[0]), int(fields[1])
         except ValueError:
             continue
-        output = fields[3]
+        # Ninja writes one row per output, including absolute/relative aliases.
+        # The command hash and interval identify the single executed edge.
+        identity = (start_ms, end_ms, fields[4] if len(fields) > 4 else fields[3])
+        edges.setdefault(identity, []).append(fields[3])
+    for (start_ms, end_ms, _), outputs in edges.items():
+        output = next((value for value in outputs if is_dependency_output(value.lower())), outputs[0])
         duration = max(0, end_ms - start_ms) / 1000
         category = classify_edge(output, link_outputs)
         current = categories.setdefault(category, {"edges": 0, "cumulative_seconds": 0.0})
@@ -143,6 +160,19 @@ def parse_ninja_log(
         "categories": categories,
         "slowest_translation_units": translation_units[:20],
     }
+
+
+def new_ninja_log_rows(before: str, after: str) -> str:
+    remaining = Counter(before.splitlines())
+    rows = ["# ninja log v5"]
+    for line in after.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        if remaining[line]:
+            remaining[line] -= 1
+        else:
+            rows.append(line)
+    return "\n".join(rows) + "\n"
 
 
 def parse_peak_rss(path: Path) -> int | None:
@@ -234,7 +264,7 @@ class Collector:
 
     def capture_build(self, name: str) -> None:
         ninja_log = self.build_dir / ".ninja_log"
-        ninja_log.unlink(missing_ok=True)
+        before = ninja_log.read_text() if ninja_log.is_file() else ""
         self.ccache("--zero-stats")
         phase = self.run_logged(
             name,
@@ -242,12 +272,13 @@ class Collector:
                 "make",
                 "build-asan",
                 f"COMPILE_JOBS={self.args.jobs}",
+                f"DEBUG_BUILD_DIR={self.build_dir}",
                 "CMAKE_BUILD_ARGS=-d stats",
             ],
         )
         captured_log = self.output_dir / f"{name}.ninja_log"
         if ninja_log.is_file():
-            shutil.copy2(ninja_log, captured_log)
+            captured_log.write_text(new_ninja_log_rows(before, ninja_log.read_text()))
         phase["ccache"] = self.ccache("--print-stats")
         phase["ninja"] = parse_ninja_log(
             captured_log,
@@ -263,11 +294,14 @@ class Collector:
         self.ccache("--zero-stats")
         configure = self.run_logged(
             "configure",
-            ["make", "configure-asan", f"COMPILE_JOBS={self.args.jobs}"],
+            ["make", "configure-asan", f"COMPILE_JOBS={self.args.jobs}",
+             f"DEBUG_BUILD_DIR={self.build_dir}"],
         )
         configure["ccache"] = self.ccache("--print-stats")
         if not self.failure_code:
             self.capture_build("cold_build")
+        if not self.failure_code:
+            self.capture_build("noop_incremental_build")
         if not self.failure_code:
             self.run_logged(
                 "clean_for_warm_build",
@@ -275,8 +309,6 @@ class Collector:
             )
             if not self.failure_code:
                 self.capture_build("warm_ccache_build")
-        if not self.failure_code:
-            self.capture_build("noop_incremental_build")
         self.write_reports()
         return self.failure_code
 
@@ -297,6 +329,9 @@ class Collector:
                 "dependency_preparation_seconds": self.args.dependency_preparation_seconds,
             },
             "phases": self.phases,
+            "dependencies": [json.loads(path.read_text()) for path in
+                             sorted((self.output_dir / "dependencies").glob("*.json"))
+                             if path.name in ("antlr4.json", "hdf5.json")],
         }
         (self.output_dir / "build-metrics.json").write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -331,8 +366,8 @@ def render_markdown(report: dict[str, Any], concise: bool) -> str:
     for name, label in (
         ("configure", "CMake configure"),
         ("cold_build", "Cold build"),
-        ("warm_ccache_build", "Warm ccache rebuild"),
         ("noop_incremental_build", "No-op incremental"),
+        ("warm_ccache_build", "Clean rebuild with warm ccache"),
     ):
         phase = phases.get(name)
         if phase is None:
@@ -347,7 +382,7 @@ def render_markdown(report: dict[str, Any], concise: bool) -> str:
     lines.extend(
         [
             "",
-            f"Dependency source preparation: **{config['dependency_preparation_seconds']:.3f} s**",
+            f"Dependency preparation (including restore or source build): **{config['dependency_preparation_seconds']:.3f} s**",
             "",
             f"Compiler cache key: `{config['compiler_cache_key']}`  ",
             f"Dependency cache key: `{config['dependency_cache_key']}`",
@@ -360,7 +395,7 @@ def render_markdown(report: dict[str, Any], concise: bool) -> str:
             [
                 "Cold-build cumulative Ninja edge time (parallel edges overlap):",
                 "",
-                f"- Dependencies: {metric(cold, 'dependency_compile') + metric(cold, 'dependency_build'):.3f} s",
+                f"- Dependencies: {sum(metric(cold, 'dependency_' + stage) for stage in ('prepare', 'compile', 'configure', 'build', 'install')):.3f} s",
                 f"- VSAG production compile: {metric(cold, 'production_compile'):.3f} s",
                 f"- Test compile: {metric(cold, 'test_compile'):.3f} s",
                 f"- Link: {metric(cold, 'link'):.3f} s",

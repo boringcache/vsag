@@ -81,6 +81,11 @@ jobs:
     env:
       VSAG_FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.ci-fetchcontent
       VSAG_THIRDPARTY_DOWNLOAD_DIR: ${{ github.workspace }}/.ci-downloads
+      CMAKE_GENERATOR: Ninja
+      VSAG_USE_PREBUILT_DEPS: ON
+      VSAG_ENABLE_EXAMPLES: ON
+      VSAG_ENABLE_TOOLS: ON
+      EXTRA_DEFINED: -DVSAG_USE_SYSTEM_OPENBLAS=ON
     steps:
       - name: Free Disk Space
         run: sudo rm -rf /opt/hostedtoolcache
@@ -109,13 +114,8 @@ jobs:
         with:
           include-tests: "true"
           include-tools: "true"
-      - name: Cache ExternalProject Archives
-        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
-        with:
-          mode: archive
-          cache-profiles: dependencies
-          trust-policy: auto
-          fail-on-cache-error: true
+      - name: Prepare Dependency Installations
+        uses: ./.github/actions/prepare-dependencies
       - name: Finish Dependency Preparation Timer
         id: dependency-preparation
         env:

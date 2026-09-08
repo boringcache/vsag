@@ -123,6 +123,48 @@ make dist-libcxx          # libc++ (Clang)
 
 The produced tarballs contain headers, static/shared libraries, and version metadata.
 
+## Validated dependency installations (Linux x86 GCC pilot)
+
+`VSAG_USE_PREBUILT_DEPS=ON` allows CMake to consume validated ANTLR4 and HDF5
+installations under `.ci-dependencies/`. The default is `OFF`. Other platforms,
+Clang, libc++ and cross-compilation retain the source build. OpenBLAS system
+selection is unchanged and OpenBLAS binaries are not cached by this pilot.
+
+Each dependency has an exact fingerprint covering its pin and source hash,
+recipe, compiler, platform, ABI and effective build options. CMake requires a
+matching manifest, every file's checksum and a successful compile/link/run check
+from a different directory. Missing or invalid installations fall back to the
+existing source recipe, including pinned offline archive overrides.
+
+On a compatible Linux host with the build dependencies and BoringCache installed,
+prepare the same configuration used by the PR pilot:
+
+```bash
+export CMAKE_GENERATOR=Ninja VSAG_USE_PREBUILT_DEPS=ON
+export VSAG_ENABLE_EXAMPLES=ON VSAG_ENABLE_TOOLS=ON
+export EXTRA_DEFINED=-DVSAG_USE_SYSTEM_OPENBLAS=ON
+make configure-asan COMPILE_JOBS=3
+mkdir -p build-metrics/dependencies
+for dependency in antlr4 hdf5; do
+  key=$(cat "build/.vsag-dependency-cache/$dependency.key")
+  boringcache run --manual-entry "vsag-install-$dependency-$key:.ci-dependencies/$dependency" \
+    --no-git --no-platform --read-only -- \
+    python3 -m scripts.ci.dependency_cache prepare \
+      --spec "build/.vsag-dependency-cache/$dependency.json" \
+      --prefix ".ci-dependencies/$dependency" \
+      --report "build-metrics/dependencies/$dependency.json"
+done
+make asan COMPILE_JOBS=3
+```
+
+Connect to the configured workspace before running the cache commands. These
+commands restore without publishing. A miss builds and validates a local
+installation. CI only publishes from trusted jobs; PRs cannot publish.
+Set `VSAG_USE_PREBUILT_DEPS=OFF` to bypass installed prefixes. HDF5 source builds
+produce static PIC C/C++ libraries without HDF5's tools, examples, tests, shared
+libraries or high-level library. VSAG's tools and tests remain enabled by their
+existing options.
+
 ## Release Publishing
 
 To publish a new GitHub Release, use the `Build and Publish Release` workflow in the GitHub

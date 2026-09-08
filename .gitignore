@@ -21,6 +21,7 @@
 .ccls-cache/
 
 # local files
+.ci-dependencies/
 .DS_Store
 ._.DS_Store
 

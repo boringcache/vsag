@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -83,6 +84,55 @@ class BuildMetricsTest(unittest.TestCase):
 
         self.assertEqual(stats["cache_hit"], 7)
         self.assertEqual(stats["cache_miss"], 3)
+
+    def test_ccache_json_counts_direct_and_preprocessed_hits(self) -> None:
+        stats = METRICS.load_ccache_stats(
+            '{"direct_cache_hit":4,"preprocessed_cache_hit":3,"cache_miss":2}'
+        )
+        self.assertEqual(stats["cache_hit"], 7)
+
+    def test_fetchcontent_and_external_project_stages_are_counted_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".ninja_log"
+            path.write_text(
+                "# ninja log v5\n"
+                "0\t500\t0\t../.ci-fetchcontent/fmt-build/fmt.cpp.o\taaa\n"
+                "0\t500\t0\t/checkout/.ci-fetchcontent/fmt-build/fmt.cpp.o\taaa\n"
+                "100\t900\t0\t.vsag-build-info/antlr4-configure\tbbb\n"
+                "900\t1900\t0\t.vsag-build-info/antlr4-build\tccc\n"
+                "900\t1900\t0\tantlr4/install/lib/libantlr4-runtime.a\tccc\n"
+                "1900\t2100\t0\t.vsag-build-info/antlr4-install\tddd\n"
+            )
+            categories = METRICS.parse_ninja_log(path, {})["categories"]
+        self.assertEqual(categories["dependency_compile"]["edges"], 1)
+        self.assertEqual(categories["dependency_configure"]["cumulative_seconds"], 0.8)
+        self.assertEqual(categories["dependency_build"]["cumulative_seconds"], 1.0)
+        self.assertEqual(categories["dependency_install"]["cumulative_seconds"], 0.2)
+
+    def test_log_delta_keeps_ninja_state_and_ignores_old_edges(self) -> None:
+        before = "# ninja log v5\n0\t10\t0\tfirst.o\taaa\n"
+        after = before + "0\t20\t1\tsecond.o\tbbb\n"
+        self.assertEqual(METRICS.new_ninja_log_rows(before, before), "# ninja log v5\n")
+        self.assertEqual(
+            METRICS.new_ninja_log_rows(before, after),
+            "# ninja log v5\n0\t20\t1\tsecond.o\tbbb\n",
+        )
+
+    def test_noop_runs_after_cold_build_before_clean_rebuild(self) -> None:
+        collector = object.__new__(METRICS.Collector)
+        with tempfile.TemporaryDirectory() as directory:
+            collector.build_dir = Path(directory) / "build"
+            collector.args = SimpleNamespace(clear_ccache=True, jobs=3)
+            collector.failure_code = 0
+            collector.ccache = Mock(return_value={})
+            collector.run_logged = Mock(return_value={})
+            collector.capture_build = Mock()
+            collector.write_reports = Mock()
+            collector.collect()
+        self.assertEqual(
+            [call.args[0] for call in collector.capture_build.call_args_list],
+            ["cold_build", "noop_incremental_build", "warm_ccache_build"],
+        )
 
     def test_collector_writes_json_markdown_and_summary_reports(self) -> None:
         previous_directory = Path.cwd()

@@ -158,6 +158,36 @@ VSAG 会在配置 / 构建阶段下载第三方库。在离线或网络受限的
 `VSAG_THIRDPARTY_*` 环境变量，从本地路径或内网镜像（内网 HTTP 服务、OSS 存储桶等）获取每个
 压缩包。完整的变量列表与示例见[离线 / 内网环境构建](offline_build.md)。
 
+## 已验证的依赖安装目录（Linux x86 GCC 试点）
+
+设置 `VSAG_USE_PREBUILT_DEPS=ON` 后，CMake 可以使用 `.ci-dependencies/` 下已验证的 ANTLR4 和 HDF5 安装目录。默认值为 `OFF`。其他平台、Clang、libc++ 和交叉编译仍从源码构建。OpenBLAS 的系统库选择不变，本试点不缓存 OpenBLAS 二进制文件。
+
+每个依赖使用独立的精确指纹，包含版本与源码哈希、构建配方、编译器、平台、ABI 和有效构建选项。CMake 会验证清单、每个文件的校验和，并在另一目录中编译、链接和运行一个使用该依赖的程序。安装目录缺失或无效时，仍使用原有源码构建流程，包括按版本指定的离线压缩包覆盖。
+
+在安装了构建依赖和 BoringCache 的兼容 Linux 主机上，可以使用与 PR 试点相同的配置：
+
+```bash
+export CMAKE_GENERATOR=Ninja VSAG_USE_PREBUILT_DEPS=ON
+export VSAG_ENABLE_EXAMPLES=ON VSAG_ENABLE_TOOLS=ON
+export EXTRA_DEFINED=-DVSAG_USE_SYSTEM_OPENBLAS=ON
+make configure-asan COMPILE_JOBS=3
+mkdir -p build-metrics/dependencies
+for dependency in antlr4 hdf5; do
+  key=$(cat "build/.vsag-dependency-cache/$dependency.key")
+  boringcache run --manual-entry "vsag-install-$dependency-$key:.ci-dependencies/$dependency" \
+    --no-git --no-platform --read-only -- \
+    python3 -m scripts.ci.dependency_cache prepare \
+      --spec "build/.vsag-dependency-cache/$dependency.json" \
+      --prefix ".ci-dependencies/$dependency" \
+      --report "build-metrics/dependencies/$dependency.json"
+done
+make asan COMPILE_JOBS=3
+```
+
+运行缓存命令前，请连接配置中指定的工作区。以上命令只恢复缓存，不发布缓存。未命中时会从源码构建并验证本地安装目录。CI 仅允许受信任的任务发布，PR 不能发布。
+
+设置 `VSAG_USE_PREBUILT_DEPS=OFF` 可禁用预编译依赖。HDF5 源码构建只生成静态 PIC C/C++ 库，不构建 HDF5 自身的工具、示例、测试、动态库和高层库。VSAG 的工具和测试仍由现有选项控制。
+
 ## 发布流程
 
 如果要在 GitHub 上手动发布 Release，请到 GitHub Actions 页面运行 `Build and Publish Release` 工作流，并填写以下参数：
