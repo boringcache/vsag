@@ -1,6 +1,9 @@
 name: Dependency validation
 
 on:
+  push:
+    branches: [boringcache-validation]
+    paths: [.github/workflows/dependency-validation.yml]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +22,7 @@ env:
 jobs:
   cold:
     name: BoringCache dependencies cold
-    if: github.repository == 'boringcache/vsag' && github.ref == 'refs/heads/boringcache-validation'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'boringcache/vsag' && github.ref == 'refs/heads/boringcache-validation'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
