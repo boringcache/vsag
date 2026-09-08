@@ -31,6 +31,9 @@ jobs:
               - '!**/*.md'
 
   build_tsan:
+    permissions:
+      contents: read
+      id-token: write
     name: Build with TSAN
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.non_markdown == 'true'
@@ -52,12 +55,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: '0'
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "5G"
-          save: ${{ github.event_name != 'pull_request' }}
-          key: build-tsan-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Make Tsan
         run: export CMAKE_GENERATOR="Ninja"; make tsan COMPILE_JOBS=3
       - name: Clean

@@ -9,6 +9,9 @@ on:
 
 jobs:
   build_asan_simd:
+    permissions:
+      contents: read
+      id-token: write
     name: Asan Build Simd
     runs-on: ubuntu-22.04
     container:
@@ -30,12 +33,16 @@ jobs:
       - name: Free Disk Space
         run: rm -rf /useless/*
       - uses: actions/checkout@v4
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "5G"
-          save: ${{ github.event_name != 'pull_request' }}
-          key: build-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Make Asan
         run: |
           export EXTRA_DEFINED=`echo "${{ matrix.simd_option }}" | awk -F';' '{print $2}'`

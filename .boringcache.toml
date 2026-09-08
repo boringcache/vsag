@@ -1,0 +1,13 @@
+workspace = "boringcache/vsag"
+
+[entries.external-archives]
+path = ".ci-downloads"
+tag = "external-archives"
+
+[profiles.dependencies]
+entries = ["external-archives"]
+
+[adapters.ccache]
+tag = "cpp"
+command = ["make", "test"]
+fail-on-cache-error = true

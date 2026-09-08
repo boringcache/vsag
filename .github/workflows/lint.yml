@@ -9,12 +9,16 @@ on:
 
 jobs:
   clang-tidy-check:
+    permissions:
+      contents: read
+      id-token: write
     name: Lint
     runs-on: ubuntu-latest
     # runs-on: self-hosted
     container:
       image: vsaglib/vsag:ci-x86-openblas
     env:
+      VSAG_ENABLE_CCACHE: "ON"
       VSAG_FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.ci-fetchcontent
       VSAG_THIRDPARTY_DOWNLOAD_DIR: ${{ github.workspace }}/.ci-downloads
     concurrency:
@@ -30,20 +34,24 @@ jobs:
       - name: Prepare FetchContent Sources
         uses: ./.github/actions/prepare-fetchcontent
       - name: Cache ExternalProject Archives
-        uses: actions/cache@v4
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
         with:
-          path: .ci-downloads
-          key: external-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('extern/**/*.cmake') }}
-          restore-keys: |
-            external-${{ runner.os }}-${{ runner.arch }}-
+          mode: archive
+          cache-profiles: dependencies
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Install clang-tidy 15
         run: sudo apt install clang-tidy-15 -y
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "5G"
-          save: ${{ github.event_name != 'pull_request' }}
-          key: build-lint-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Run lint
         # `make release` defaults to the OpenBLAS backend. Reuse the system
         # OpenBLAS shipped in the ci-x86-openblas image so lint doesn't have

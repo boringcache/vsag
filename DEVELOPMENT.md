@@ -207,3 +207,24 @@ For a complete list of build options, see the `option()` directives in `cmake/VS
 - `src/`: the source codes and unit tests
 - `tests/`: the functional tests
 - `tools/`: the tools
+# BoringCache validation
+
+The `boringcache-validation` branch uses `.boringcache.toml` for native ccache
+storage and the existing `.ci-downloads` archive cache. CI installs ccache 4.14
+and its HTTP helper through `.mise.toml` and `mise.lock`. The compiler, build
+flags, dependency recipes, tests, and runners remain the upstream choices.
+
+For local use, install BoringCache and the upstream build dependencies, connect
+to the configured workspace with `boringcache onboard --skip-workflows`, then
+run `mise install` and `mise exec -- boringcache ccache`. The configured command
+is `make test`. Local runs restore by default; publishing requires explicit
+write access. Compatible compiler inputs can reuse the same remote cache;
+different operating systems, architectures, compilers, and flags do not imply
+interchangeable outputs.
+
+GitHub Actions uses a workspace-scoped OIDC connection. Pull requests restore
+without publishing, and the daily jobs retain their read-only cache policy.
+The PR x86 measurement job still clears its local compiler cache. Python wheel
+containers and the Docker image build graph retain their existing integration.
+Nested ANTLR4 and HDF5 builds are not claimed as compiler-cache hits or cached
+installation prefixes.

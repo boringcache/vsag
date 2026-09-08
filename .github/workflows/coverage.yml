@@ -27,6 +27,9 @@ jobs:
               - '!**/*.md'
 
   coverage:
+    permissions:
+      contents: read
+      id-token: write
     name: Test Coverage
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.non_markdown == 'true'
@@ -49,12 +52,12 @@ jobs:
         with:
           include-tests: "true"
       - name: Cache ExternalProject Archives
-        uses: actions/cache@v4
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
         with:
-          path: .ci-downloads
-          key: external-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('extern/**/*.cmake') }}
-          restore-keys: |
-            external-${{ runner.os }}-${{ runner.arch }}-
+          mode: archive
+          cache-profiles: dependencies
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Install lcov
         run: |
           apt update
@@ -62,12 +65,16 @@ jobs:
           git clone https://github.com/linux-test-project/lcov.git
           cd lcov && git checkout v2.3 && make SHELL=/bin/bash install
           lcov --version
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "5G"
-          save: ${{ github.event_name != 'pull_request' }}
-          key: build-cov-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Compile with Coverage Flags
         # `make cov` defaults to the OpenBLAS backend. Use the system-installed
         # OpenBLAS in the ci-x86-openblas image instead of building OpenBLAS

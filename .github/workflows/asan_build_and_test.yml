@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
 jobs:
   build_asan_x86:
+    permissions:
+      contents: read
+      id-token: write
     name: Asan Build X86
     runs-on: ubuntu-22.04
     container:
@@ -21,12 +24,16 @@ jobs:
       - name: Free Disk Space
         run: rm -rf /useless/hostedtoolcache
       - uses: actions/checkout@v4
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "2G"
-          save: ${{ github.event_name != 'pull_request' }}
-          key: build-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Make Asan
         run: export VSAG_ENABLE_INTEL_MKL=ON CMAKE_GENERATOR="Ninja"; make asan COMPILE_JOBS=3 VSAG_ENABLE_EXAMPLES=ON
       - name: Clean
@@ -46,6 +53,9 @@ jobs:
           overwrite: 'true'
 
   build_asan_aarch64:
+    permissions:
+      contents: read
+      id-token: write
     name: Asan Build Aarch64
     runs-on: ubuntu-22.04-arm
     container:
@@ -59,12 +69,16 @@ jobs:
       - name: Free Disk Space
         run: rm -rf /useless/hostedtoolcache
       - uses: actions/checkout@v4
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "2G"
-          save: ${{ github.event_name != 'pull_request' }}
-          key: build-aarch-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Make Asan
         run: export CMAKE_GENERATOR="Ninja"; make asan COMPILE_JOBS=3 VSAG_ENABLE_EXAMPLES=ON
       - name: Clean
@@ -79,6 +93,9 @@ jobs:
           overwrite: 'true'
 
   build_asan_macos_arm64:
+    permissions:
+      contents: read
+      id-token: write
     name: Asan Build macOS arm64
     runs-on: macos-15
     concurrency:
@@ -97,12 +114,16 @@ jobs:
         run: |
           clang++ --version
           cmake --version
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "2G"
-          save: true
-          key: build-macos-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: auto
+          fail-on-cache-error: true
       - name: Make Asan
         run: export CMAKE_GENERATOR="Ninja" CMAKE_EXPORT_COMPILE_COMMANDS=ON; make asan VSAG_ENABLE_EXAMPLES=ON COMPILE_JOBS=3
       - name: Clean

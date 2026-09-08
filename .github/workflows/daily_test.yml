@@ -7,6 +7,9 @@ on:
 
 jobs:
   daily_build_asan_x86:
+    permissions:
+      contents: read
+      id-token: write
     name: Asan Build X86
     runs-on: ubuntu-22.04
     container:
@@ -21,13 +24,17 @@ jobs:
         run: rm -rf /useless/hostedtoolcache
       - uses: actions/checkout@v4
         with:
-          ref: main
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || 'main' }}
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "2G"
-          save: false
-          key: build-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: restore
+          fail-on-cache-error: true
       - name: Make Asan
         # Daily guard for the from-source OpenBLAS build path. We intentionally
         # do NOT pass -DUSE_SYSTEM_OPENBLAS=ON here: even though the image
@@ -49,6 +56,9 @@ jobs:
           overwrite: 'true'
 
   daily_build_asan_aarch64:
+    permissions:
+      contents: read
+      id-token: write
     name: Asan Build Aarch64
     runs-on: ubuntu-22.04-arm
     container:
@@ -63,13 +73,17 @@ jobs:
         run: rm -rf /useless/hostedtoolcache
       - uses: actions/checkout@v4
         with:
-          ref: main
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || 'main' }}
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "2G"
-          save: false
-          key: build-aarch-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: restore
+          fail-on-cache-error: true
       - name: Make Asan
         run: export CMAKE_GENERATOR="Ninja"; make asan COMPILE_JOBS=3 VSAG_ENABLE_EXAMPLES=ON
       - name: Clean
@@ -302,6 +316,9 @@ jobs:
           overwrite: 'true'
 
   daily_build_tsan:
+    permissions:
+      contents: read
+      id-token: write
     name: Daily Build with TSAN
     runs-on: ubuntu-22.04
     concurrency:
@@ -313,13 +330,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: '0'
-          ref: main
-      - name: Load Cache
-        uses: hendrikmuhs/ccache-action@v1.2
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || 'main' }}
+      - name: Install ccache tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          max-size: "2G"
-          save: false
-          key: build-tsan-${{ hashFiles('./CMakeLists.txt') }}-${{ hashFiles('./.circleci/fresh_ci_cache.commit') }}
+          cache: false
+      - name: Compiler cache
+        uses: boringcache/one@e4ead12dabc993eba201c402a82e396166dade03 # v1.20.4
+        with:
+          mode: ccache
+          trust-policy: restore
+          fail-on-cache-error: true
       - name: Make Tsan
         env:
           VSAG_OPENBLAS_TARGET: GENERIC
