@@ -54,6 +54,7 @@ endif ()
 
 add_library (vsag_antlr4_runtime_headers INTERFACE)
 target_include_directories (vsag_antlr4_runtime_headers SYSTEM INTERFACE
+    ${install_dir}/include
     ${install_dir}/include/antlr4-runtime)
 
 if (NOT TARGET antlr4-runtime)
