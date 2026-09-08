@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: vsaglib/vsag:ci-x86-mkl
+      options: --init
       volumes:
         - /opt:/useless
     concurrency:
@@ -62,6 +63,7 @@ jobs:
     runs-on: ubuntu-22.04-arm
     container:
       image: vsaglib/vsag:ci-aarch64-openblas
+      options: --init
       volumes:
         - /opt:/useless
     concurrency:

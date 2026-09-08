@@ -17,6 +17,7 @@ jobs:
     # runs-on: self-hosted
     container:
       image: vsaglib/vsag:ci-x86-openblas
+      options: --init
     env:
       VSAG_ENABLE_CCACHE: "ON"
       VSAG_FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.ci-fetchcontent

@@ -47,6 +47,7 @@ jobs:
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     container:
       image: vsaglib/vsag:ci-x86-openblas
+      options: --init
       volumes:
         - /opt:/useless
     steps:

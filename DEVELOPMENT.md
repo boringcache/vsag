@@ -207,12 +207,15 @@ For a complete list of build options, see the `option()` directives in `cmake/VS
 - `src/`: the source codes and unit tests
 - `tests/`: the functional tests
 - `tools/`: the tools
+
 # BoringCache validation
 
 The `boringcache-validation` branch uses `.boringcache.toml` for native ccache
 storage and the existing `.ci-downloads` archive cache. CI installs ccache 4.14
 and its HTTP helper through `.mise.toml` and `mise.lock`. The compiler, build
 flags, dependency recipes, tests, and runners remain the upstream choices.
+Linux cache jobs use Docker's `--init` option to reap background processes, and
+disk cleanup preserves the directory mounted at `/__t` for action installers.
 
 For local use, install BoringCache and the upstream build dependencies, connect
 to the configured workspace with `boringcache onboard --skip-workflows`, then
