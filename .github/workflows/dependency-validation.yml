@@ -2,6 +2,11 @@ name: Dependency validation
 
 on:
   workflow_dispatch:
+    inputs:
+      seed:
+        description: Build installations and check source fallback before the fresh-runner restore.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -19,7 +24,7 @@ env:
 jobs:
   cold:
     name: BoringCache dependencies cold
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'boringcache/vsag' && github.ref == 'refs/heads/boringcache-validation'
+    if: inputs.seed && github.repository == 'boringcache/vsag' && github.ref == 'refs/heads/boringcache-validation'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
@@ -59,6 +64,7 @@ jobs:
   warm:
     name: BoringCache dependencies warm
     needs: cold
+    if: ${{ !cancelled() && (needs.cold.result == 'success' || !inputs.seed) }}
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
